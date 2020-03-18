@@ -2212,10 +2212,66 @@ __setup("console=", console_setup);
  * be used by arch-specific code either to override the user or more
  * commonly to provide a default console (ie from PROM variables) when
  * the user has not supplied one.
+ *
+ * Preferences set by this function don't take effect until the next
+ * time a matching driver for the preferred console is registered. If a
+ * matching driver was already registered, @update_console_to_preferred
+ * function can be used to set that as the preferred console driver.
  */
 int add_preferred_console(char *name, int idx, char *options)
 {
 	return __add_preferred_console(name, idx, options, NULL, false);
+}
+
+/**
+ * update_console_to_preferred - set console to the preferred console's driver.
+ *
+ * Updates console_drivers and CON_CONSDEV flags so that an already
+ * registered and enabled console driver matching the preferred console
+ * is used as /dev/console.
+ *
+ * Must be called within console_lock();.
+ */
+int update_console_to_preferred(void)
+{
+	struct console_cmdline *c = NULL;
+	struct console *con = NULL;
+	struct console *tmp = NULL;
+
+	if (preferred_console >= 0)
+		c = &console_cmdline[preferred_console];
+
+	if (!c || !c->name[0])
+		return 0;
+
+	for_each_console(con) {
+		if (!con->next || !(con->next->flags & CON_ENABLED))
+			continue;
+		if (strcmp(c->name, con->next->name) != 0)
+			continue;
+		if (con->next->index >= 0 &&
+		    con->next->index != c->index)
+			continue;
+		break;
+	}
+
+	if (!con)
+		return -ENODEV;
+
+	pr_info("switching to console [%s%d]\n",
+		con->next->name, con->next->index);
+
+	tmp = con->next;
+	con->next = con->next->next;
+	tmp->next = console_drivers;
+	console_drivers = tmp;
+
+	if (console_drivers->next)
+		console_drivers->next->flags &= ~CON_CONSDEV;
+	console_drivers->flags |= CON_CONSDEV;
+	has_preferred_console = true;
+
+	return 0;
 }
 
 bool console_suspend_enabled = true;
