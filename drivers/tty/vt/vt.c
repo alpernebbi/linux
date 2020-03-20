@@ -3566,6 +3566,13 @@ static int do_bind_con_driver(const struct consw *csw, int first, int last,
 		pr_cont("to %s\n", desc);
 	}
 
+#ifdef CONFIG_VT_CONSOLE
+	if (!console_set_on_cmdline && deflt && conswitchp != &dummy_con) {
+		add_preferred_console("tty", 0, NULL);
+		update_console_to_preferred();
+	}
+#endif
+
 	retval = 0;
 err:
 	module_put(owner);
