@@ -277,7 +277,19 @@ static struct console *exclusive_console;
 
 #define MAX_CMDLINECONSOLES 8
 
+/*
+ * The preferred_console and has_preferred_console variables are
+ * intentionally not modified to reflect this so that the first
+ * registered console is still used as the preferred console.
+ */
+#ifdef CONFIG_VT_CONSOLE
+static struct console_cmdline console_cmdline[MAX_CMDLINECONSOLES] = {
+	[0].name = "tty",
+	[0].index = 0,
+};
+#elif
 static struct console_cmdline console_cmdline[MAX_CMDLINECONSOLES];
+#endif
 
 static int preferred_console = -1;
 static bool has_preferred_console;
