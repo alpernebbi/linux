@@ -31,6 +31,14 @@ properties:
     description: The EC bus we'd like to talk to.
     $ref: /schemas/types.yaml#/definitions/uint32
 
+  google,limited-passthrough:
+    $ref: /schemas/types.yaml#/definitions/flag
+    description: |
+      Use a limited passthrough mode that only supports communicating
+      with SBS-compliant batteries. This is necessary for earlier boards
+      where the EC's I2C passthrough functionality is intentionally
+      locked down, presumably as a security concern.
+
 required:
   - compatible
   - google,remote-bus
