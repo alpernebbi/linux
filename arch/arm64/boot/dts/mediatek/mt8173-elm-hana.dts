@@ -13,3 +13,7 @@
 		     "google,hana-rev4", "google,hana-rev3",
 		     "google,hana", "mediatek,mt8173";
 };
+
+&i2c_tunnel {
+	google,limited-passthrough;
+};
