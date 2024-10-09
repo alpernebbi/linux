@@ -35,6 +35,92 @@ struct ec_i2c_device {
 	u8 response_buf[256];
 };
 
+#define CHECK_I2C_WR(num, length) \
+	(((i2c_msgs[num].flags & I2C_M_RD) == 0) && (i2c_msgs[num].len == length))
+
+#define CHECK_I2C_RD(num, length) \
+	((i2c_msgs[num].flags & I2C_M_RD) && (i2c_msgs[num].len == length))
+
+/* Standard I2C address for smart batteries */
+#define SBS_I2C_ADDR 0xB
+
+static int ec_i2c_forward_msg(struct ec_i2c_device *bus, int cmd,
+			      struct i2c_msg *outmsg, struct i2c_msg *inmsg)
+{
+	struct cros_ec_command *msg;
+	int ret;
+	int inmsg_len = inmsg ? inmsg->len : 0;
+	int outmsg_len = outmsg ? outmsg->len : 0;
+
+	msg = kzalloc(sizeof(*msg) + max(inmsg_len, outmsg_len), GFP_KERNEL);
+
+	msg->command = cmd;
+	msg->outsize = outmsg_len;
+	msg->insize = inmsg_len;
+
+	if (outmsg)
+		memcpy(msg->data, outmsg->buf, outmsg->len);
+
+	ret = cros_ec_cmd_xfer_status(bus->ec, msg);
+	if (ret >= 0 && inmsg)
+		memcpy(inmsg->buf, msg->data, inmsg->len);
+	return ret;
+}
+
+static int ec_i2c_limited_xfer(struct i2c_adapter *adap, struct i2c_msg i2c_msgs[],
+			       int num)
+{
+	struct ec_i2c_device *bus = adap->algo_data;
+	int ret;
+
+	if (!num || (i2c_msgs[0].addr != SBS_I2C_ADDR))
+		return -ENODEV;
+
+	/* Battery device probing */
+	if ((num == 1) && (i2c_msgs[0].len == 0)) {
+		uint8_t dummy[] = { 0x0d, 0 };
+		struct i2c_msg otmp = { .buf = dummy, .len = 1 };
+		struct i2c_msg itmp = { .buf = dummy, .len = 2 };
+
+		ret = ec_i2c_forward_msg(bus, EC_CMD_SB_READ_WORD,
+					  &otmp, &itmp);
+		return ret < 0 ? ret : num;
+	}
+	/* Read a word-sized register */
+	if ((num == 1) && CHECK_I2C_WR(0, 3)) {
+		ret = ec_i2c_forward_msg(bus, EC_CMD_SB_WRITE_WORD,
+					  &i2c_msgs[0], NULL);
+		return ret < 0 ? ret : num;
+	}
+	/* Write a word-sized register */
+	if ((num == 2) && CHECK_I2C_WR(0, 1) && CHECK_I2C_RD(1, 2)) {
+		ret = ec_i2c_forward_msg(bus, EC_CMD_SB_READ_WORD,
+					  &i2c_msgs[0], &i2c_msgs[1]);
+		return ret < 0 ? ret : num;
+	}
+	/* Retrieve string data length */
+	if ((num == 2) && CHECK_I2C_WR(0, 1) && CHECK_I2C_RD(1, 1)) {
+		i2c_msgs[1].buf[0] = I2C_SMBUS_BLOCK_MAX;
+		return num;
+	}
+	/* Read string data */
+	if ((num == 2) && CHECK_I2C_WR(0, 1) &&
+			  CHECK_I2C_RD(1, I2C_SMBUS_BLOCK_MAX)) {
+		char tmpblock[I2C_SMBUS_BLOCK_MAX + 1];
+		struct i2c_msg tmpmsg = { .buf = tmpblock,
+					  .len = I2C_SMBUS_BLOCK_MAX };
+		ret = ec_i2c_forward_msg(bus, EC_CMD_SB_READ_BLOCK,
+					 &i2c_msgs[0], &tmpmsg);
+		tmpblock[I2C_SMBUS_BLOCK_MAX] = 0;
+		/* real string length */
+		i2c_msgs[1].buf[0] = strlen(tmpblock);
+		strscpy(&i2c_msgs[1].buf[1], tmpblock, i2c_msgs[1].len);
+		return ret < 0 ? ret : num;
+	}
+
+	return -EIO;
+}
+
 /**
  * ec_i2c_count_message - Count bytes needed for ec_i2c_construct_message
  *
@@ -239,6 +325,11 @@ static const struct i2c_algorithm ec_i2c_algorithm = {
 	.functionality = ec_i2c_functionality,
 };
 
+static const struct i2c_algorithm ec_i2c_limited_algorithm = {
+	.xfer	= ec_i2c_limited_xfer,
+	.functionality	= ec_i2c_functionality,
+};
+
 static int ec_i2c_probe(struct platform_device *pdev)
 {
 	struct cros_ec_device *ec = dev_get_drvdata(pdev->dev.parent);
@@ -274,6 +365,9 @@ static int ec_i2c_probe(struct platform_device *pdev)
 	bus->adap.dev.of_node = pdev->dev.of_node;
 	bus->adap.retries = I2C_MAX_RETRIES;
 	ACPI_COMPANION_SET(&bus->adap.dev, ACPI_COMPANION(&pdev->dev));
+
+	if (device_property_read_bool(dev, "google,limited-passthrough"))
+		bus->adap.algo = &ec_i2c_limited_algorithm;
 
 	err = i2c_add_adapter(&bus->adap);
 	if (err)
