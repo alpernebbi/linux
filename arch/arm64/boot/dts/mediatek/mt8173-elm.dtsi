@@ -216,7 +216,8 @@
 };
 
 &dpi0 {
-	status = "okay";
+	/* TODO Re-enable after DP to Type-C port muxing can be described */
+	status = "disabled";
 };
 
 &hdmi0 {
