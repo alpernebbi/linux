@@ -648,7 +648,7 @@ static struct snd_soc_dai_link cz_dai_5682_98357[] = {
 };
 
 static const struct snd_soc_dapm_widget cz_widgets[] = {
-	SND_SOC_DAPM_HP("Headphones", NULL),
+	SND_SOC_DAPM_HP("Headphone Jack", NULL),
 	SND_SOC_DAPM_SPK("Speakers", NULL),
 	SND_SOC_DAPM_LINE("Line Out", NULL),
 	SND_SOC_DAPM_MIC("Headset Mic", NULL),
@@ -656,23 +656,23 @@ static const struct snd_soc_dapm_widget cz_widgets[] = {
 };
 
 static const struct snd_soc_dapm_route cz_audio_route[] = {
-	{"Headphones", NULL, "HPL"},
-	{"Headphones", NULL, "HPR"},
+	{"Headphone Jack", NULL, "HPL"},
+	{"Headphone Jack", NULL, "HPR"},
 	{"MIC", NULL, "Headset Mic"},
 	{"Speakers", NULL, "Speaker"},
 	{"PDM_DAT", NULL, "Int Mic"},
 };
 
 static const struct snd_soc_dapm_route cz_rt5682_audio_route[] = {
-	{"Headphones", NULL, "HPOL"},
-	{"Headphones", NULL, "HPOR"},
+	{"Headphone Jack", NULL, "HPOL"},
+	{"Headphone Jack", NULL, "HPOR"},
 	{"IN1P", NULL, "Headset Mic"},
 	{"Speakers", NULL, "Speaker"},
 	{"PDM_DAT", NULL, "Int Mic"},
 };
 
 static const struct snd_kcontrol_new cz_mc_controls[] = {
-	SOC_DAPM_PIN_SWITCH("Headphones"),
+	SOC_DAPM_PIN_SWITCH("Headphone Jack"),
 	SOC_DAPM_PIN_SWITCH("Speakers"),
 	SOC_DAPM_PIN_SWITCH("Line Out"),
 	SOC_DAPM_PIN_SWITCH("Headset Mic"),
